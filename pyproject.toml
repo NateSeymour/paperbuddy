@@ -1,0 +1,22 @@
+[project]
+name = "paperbuddy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Nathan Seymour", email = "nathan@seymour.global" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "json2latex>=0.0.3",
+    "pypandoc>=1.17",
+    "pypandoc-binary>=1.17",
+    "watchdog>=6.0.0",
+]
+
+[project.scripts]
+paperbuddy = "paperbuddy:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
