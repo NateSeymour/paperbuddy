@@ -9,14 +9,15 @@ import watchdog.events
 import watchdog.observers
 import time
 import re
+import os
 
 class FileChangeEventHandler(watchdog.events.FileSystemEventHandler):
     def on_any_event(self, event: watchdog.events.FileSystemEvent):
         print("Change detected. Rebuilding...")
-        build(self.args)
+        build(**self.build_args)
 
-    def __init__(self, args):
-        self.args = args
+    def __init__(self, **kwargs):
+        self.build_args = kwargs
 
 def create_files(files, base=".", allow_exists=True):
     pathlib.Path(base).mkdir(allow_exists)
@@ -29,10 +30,8 @@ def create_files(files, base=".", allow_exists=True):
         else:
             file.write_text(content)
 
-def resolve_project(path):
+def resolve_paper(path):
     path = pathlib.Path(path)
-
-    project = {}
 
     if not path.exists():
         print(f"[ERROR] {path} does not exist.")
@@ -40,17 +39,10 @@ def resolve_project(path):
 
     if path.is_dir():
         with open(f"{path}/paper.json") as file:
-            project = json.load(file)
-
-    available_templates = {}
-    template_directories = [path]
-
-    for dir in template_directories:
-        for child in dir.iterdir():
-            if child.suffix == ".tex":
-                available_templates[child.stem] = child.resolve()
-
-    return project, available_templates
+            return json.load(file)
+    else:
+        print(f"[ERROR] {path} does not contain a valid project.")
+        exit(1)
 
 # Initializes a directory for a new paper project
 def init(path, title="My Paper", template="simple", author="Me", **kwargs):
@@ -64,6 +56,7 @@ def init(path, title="My Paper", template="simple", author="Me", **kwargs):
         ("build", None),
         ("content", None),
         ("content/main.md", f"# {title}"),
+        ("templates", None),
         ("paper.json", json.dumps({
             "version": 1,
             "template": template,
@@ -79,8 +72,24 @@ def init(path, title="My Paper", template="simple", author="Me", **kwargs):
     ])
 
 # Builds project
-def build(path, watch):
-    project, available_templates = resolve_project(args.path)
+def build(path, **kwargs):
+    os.chdir(pathlib.Path(path).resolve())
+
+    paper = resolve_paper(".")
+
+    # Resolve all possible templates
+    available_templates = {}
+    template_directories = [
+        pathlib.Path("./templates")
+    ]
+
+    for template_directory in template_directories:
+        if not template_directory.exists():
+            continue
+
+        for child in template_directory.iterdir():
+            if child.suffix == ".tex":
+                available_templates[child.stem] = child.resolve()
 
     # Generate temporary build files
     pathlib.Path("build").mkdir(exist_ok=True)
@@ -117,6 +126,15 @@ def build(path, watch):
     with open("build/__data.tex", "w") as file:
         file.write(json2latex.dumps("data", paper))
 
+    # Resolve template
+    template = paper.get("template", "simple")
+
+    if template not in available_templates:
+        print(f"[ERROR] template `{template}` could not be found.")
+        exit(1)
+
+    template_path = available_templates[template]
+
     # Run tool
     if shutil.which("latexmk"):
         subprocess.run([
@@ -124,7 +142,7 @@ def build(path, watch):
             "-pdf",
             "-quiet",
             "-outdir=build",
-            template_path.resolve()
+            template_path
         ])
     else:
         print("Error: could not locate latexmk!")
@@ -132,19 +150,22 @@ def build(path, watch):
 
     print("Build complete!")
 
-    if args.watch:
-        print("Watching sources...")
 
-        observer = watchdog.observers.Observer()
-        observer.schedule(FileChangeEventHandler(args), "content", recursive=True)
-        observer.start()
+def watch(**kwargs):
+    print("Watching sources...")
 
-        try:
-            while True:
-                time.sleep(1)
-        finally:
-            observer.stop()
-            observer.join()
+    observer = watchdog.observers.Observer()
+    observer.schedule(FileChangeEventHandler(**kwargs), "content", recursive=True)
+    observer.start()
+
+    build(**kwargs)
+
+    try:
+        while True:
+            time.sleep(1)
+    finally:
+        observer.stop()
+        observer.join()
 
 def main():
     # Process arguments
@@ -152,13 +173,16 @@ def main():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     parser_init = subparsers.add_parser("init")
-    parser_init.add_argument("path", default=".")
+    parser_init.add_argument("path", nargs="?", default=".")
     parser_init.set_defaults(func=init)
 
     parser_build = subparsers.add_parser("build")
-    parser_build.add_argument("path", default=".")
-    parser_build.add_argument("--watch", action="store_true")
+    parser_build.add_argument("path", nargs="?", default=".")
     parser_build.set_defaults(func=build)
+
+    parser_watch = subparsers.add_parser("watch")
+    parser_watch.add_argument("path", nargs="?", default=".")
+    parser_watch.set_defaults(func=watch)
 
     args = parser.parse_args()
     args.func(**vars(args))
