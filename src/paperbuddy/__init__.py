@@ -2,7 +2,6 @@ import pathlib
 import json
 import argparse
 import json2latex
-import os
 import pypandoc
 import subprocess
 import shutil
@@ -10,6 +9,25 @@ import watchdog.events
 import watchdog.observers
 import time
 import re
+
+class FileChangeEventHandler(watchdog.events.FileSystemEventHandler):
+    def on_any_event(self, event: watchdog.events.FileSystemEvent):
+        print("Change detected. Rebuilding...")
+        build(self.args)
+
+    def __init__(self, args):
+        self.args = args
+
+def create_files(files, base=".", allow_exists=True):
+    pathlib.Path(base).mkdir(allow_exists)
+
+    for path, content in files:
+        file = pathlib.Path(f"{base}/{path}")
+
+        if content == None:
+            file.mkdir(allow_exists)
+        else:
+            file.write_text(content)
 
 def resolve_project(path):
     path = pathlib.Path(path)
@@ -35,28 +53,33 @@ def resolve_project(path):
     return project, available_templates
 
 # Initializes a directory for a new paper project
-def init(args):
-    options = {
-        "version": 1,
-        "template": "simple",
-        "title": "-",
-        "author": "-",
+def init(path, title="My Paper", template="simple", author="Me", **kwargs):
+    print(f"Creating new project in {path}...")
 
-        "build": {
-            "plugins": [],
-        },
-    }
+    if pathlib.Path(path).exists():
+        print(f"[ERROR] project already exists in `{path}`.")
+        exit(1)
 
-    pathlib.Path(args.path).mkdir(exist_ok=True)
-    pathlib.Path(f"{args.path}/build").mkdir(exist_ok=True)
-    pathlib.Path(f"{args.path}/content").mkdir(exist_ok=True)
-    pathlib.Path(f"{args.path}/content/main.md").write_text("# Welcome to my Paper")
-    pathlib.Path(f"{args.path}/paper.json").write_text(json.dumps(options))
-    pathlib.Path(f"{args.path}/sources.bib").write_text("\n")
-    pathlib.Path(f"{args.path}/.gitignore").write_text("build")
+    create_files(base=path, files=[
+        ("build", None),
+        ("content", None),
+        ("content/main.md", f"# {title}"),
+        ("paper.json", json.dumps({
+            "version": 1,
+            "template": template,
+            "title": title,
+            "author": author,
+
+            "build": {
+                "plugins": [],
+            },
+        }, indent=4)),
+        ("sources.bib", "\n"),
+        (".gitignore", "build"),
+    ])
 
 # Builds project
-def build(args):
+def build(path, watch):
     project, available_templates = resolve_project(args.path)
 
     # Generate temporary build files
@@ -109,57 +132,33 @@ def build(args):
 
     print("Build complete!")
 
-# Process arguments
-parser = argparse.ArgumentParser(description="Generates Academic Paper from Course Files")
-subparsers = parser.add_subparsers(dest="command", required=True)
+    if args.watch:
+        print("Watching sources...")
 
-parser_init = subparsers.add_parser("init")
-parser_init.add_argument("path", default=".")
-parser_init.add_argument("--simple", action="store_true")
-parser_init.set_defaults(func=init)
+        observer = watchdog.observers.Observer()
+        observer.schedule(FileChangeEventHandler(args), "content", recursive=True)
+        observer.start()
 
-parser_build = subparsers.add_parser("build")
-parser_build.add_argument("path", default=".")
-parser_build.add_argument("--watch", action="store_true")
-parser_build.set_defaults(func=build)
+        try:
+            while True:
+                time.sleep(1)
+        finally:
+            observer.stop()
+            observer.join()
 
-args = parser.parse_args()
-args.func(args)
+def main():
+    # Process arguments
+    parser = argparse.ArgumentParser(description="Generates Academic Paper from Course Files")
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-# Grab template directory
-templates = pathlib.Path("templates").resolve()
+    parser_init = subparsers.add_parser("init")
+    parser_init.add_argument("path", default=".")
+    parser_init.set_defaults(func=init)
 
-# CWD
-os.chdir(pathlib.Path(args.source).resolve())
+    parser_build = subparsers.add_parser("build")
+    parser_build.add_argument("path", default=".")
+    parser_build.add_argument("--watch", action="store_true")
+    parser_build.set_defaults(func=build)
 
-# Read paper information
-paper = {}
-with open("paper.json") as file:
-    paper = json.load(file)
-
-print(f"Building paper...")
-
-# Get template
-template_path = pathlib.Path(f"{templates.resolve()}/{paper["meta"]["template"]}.tex")
-print(f"Using template in {template_path.resolve()}")
-
-build()
-
-class FileChangeEventHandler(watchdog.events.FileSystemEventHandler):
-    def on_any_event(self, event: watchdog.events.FileSystemEvent):
-        print("Change detected. Rebuilding...")
-        build()
-
-if args.watch:
-    print("Watching for file changes...")
-
-    observer = watchdog.observers.Observer()
-    observer.schedule(FileChangeEventHandler(), "content", recursive=True)
-    observer.start()
-
-    try:
-        while True:
-            time.sleep(1)
-    finally:
-        observer.stop()
-        observer.join()
+    args = parser.parse_args()
+    args.func(**vars(args))
