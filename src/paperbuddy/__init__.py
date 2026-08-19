@@ -10,6 +10,8 @@ import watchdog.observers
 import time
 import re
 import os
+import sys
+import importlib.resources
 
 class FileChangeEventHandler(watchdog.events.FileSystemEventHandler):
     def on_any_event(self, event: watchdog.events.FileSystemEvent):
@@ -83,6 +85,12 @@ def build(path, **kwargs):
         pathlib.Path("./templates")
     ]
 
+    # Add built-in templates
+    builtin_template_directory = importlib.resources.files("paperbuddy").joinpath("templates")
+    with importlib.resources.as_file(builtin_template_directory) as local_path:
+        template_directories.insert(0, local_path.absolute())
+
+    # Process template directories
     for template_directory in template_directories:
         if not template_directory.exists():
             continue
@@ -167,6 +175,10 @@ def watch(**kwargs):
         observer.stop()
         observer.join()
 
+def info(**kwargs):
+    print("paperbuddy v0.3.0 by Nathan Seymour <nathan@seymour.global>")
+    print(f"Installed in `{sys.prefix}`")
+
 def main():
     # Process arguments
     parser = argparse.ArgumentParser(description="Generates Academic Paper from Course Files")
@@ -183,6 +195,9 @@ def main():
     parser_watch = subparsers.add_parser("watch")
     parser_watch.add_argument("path", nargs="?", default=".")
     parser_watch.set_defaults(func=watch)
+
+    parser_info = subparsers.add_parser("info")
+    parser_info.set_defaults(func=info)
 
     args = parser.parse_args()
     args.func(**vars(args))
