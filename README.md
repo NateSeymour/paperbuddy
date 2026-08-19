@@ -15,3 +15,14 @@
 - `paperbuddy init [path]` - Initializes a new project and creates source tree.
 - `paperbuddy build [path]` - Build paper.
 - `paperbuddy watch [path]` - Watches source directory and rebuilds on files changes.
+
+## Installation
+
+Clone the repository and install with `uv`.
+
+```bash
+git clone https://github.com/NateSeymour/paperbuddy
+
+cd paperbuddy
+uv tool install .
+```
