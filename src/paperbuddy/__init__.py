@@ -21,6 +21,16 @@ class FileChangeEventHandler(watchdog.events.FileSystemEventHandler):
     def __init__(self, **kwargs):
         self.build_args = kwargs
 
+def build_latex_argstring(arg):
+    if isinstance(arg, str):
+        return arg
+    elif isinstance(arg, list):
+        return ", ".join(arg)
+    elif isinstance(arg, dict):
+        return build_latex_argstring([f"{key}={value}" for key, value in arg.items()])
+
+    return None
+
 def create_files(files, base=".", allow_exists=True):
     pathlib.Path(base).mkdir(allow_exists)
 
@@ -47,7 +57,7 @@ def resolve_paper(path):
         exit(1)
 
 # Initializes a directory for a new paper project
-def init(path, title="My Paper", template="simple", author="Me", **kwargs):
+def init(path, title="My Paper", template="simple", author="Me", language="english", **kwargs):
     print(f"Creating new project in {path}...")
 
     if pathlib.Path(path).exists():
@@ -60,13 +70,36 @@ def init(path, title="My Paper", template="simple", author="Me", **kwargs):
         ("content/main.md", f"# {title}"),
         ("templates", None),
         ("paper.json", json.dumps({
-            "version": 1,
             "template": template,
             "title": title,
             "author": author,
 
+            "document": {
+                "class": "article",
+                "fontsize": "11pt",
+                "paper": "a4paper",
+            },
+
             "build": {
                 "plugins": [],
+                "packages": {
+                    "geometry": {
+                        "margin": "2cm",
+                    },
+                    "fontenc": "T1",
+                    "helvet": "scaled",
+                    "setspace": None,
+                    "babel": language,
+                    "acronym": None,
+                    "csquotes": None,
+                    "biblatex": {
+                        "style": "apa",
+                        "backend": "biber",
+                    },
+                    "hyperref": None,
+                    "color": None,
+                    "soul": None,
+                },
             },
         }, indent=4)),
         ("sources.bib", "\n"),
@@ -130,6 +163,34 @@ def build(path, **kwargs):
         # Write output
         pypandoc.convert_text(raw, format="markdown+mark", to="latex", outputfile=f"build/{source.stem}.tex")
 
+    # Preamble
+    with open("build/__preamble.tex", "w") as file:
+        preamble = ""
+
+        preamble += f"\\documentclass[{paper["document"]["fontsize"]}, {paper["document"]["paper"]}]{{{paper["document"]["class"]}}}\n"
+
+        for package, args in paper["build"]["packages"].items():
+            argstring = build_latex_argstring(args)
+
+            if argstring:
+                preamble += f"\\usepackage[{argstring}]{{{package}}}\n"
+            else:
+                preamble += f"\\usepackage{{{package}}}\n"
+
+        preamble += "\\addbibresource{sources.bib}\n"
+
+        preamble += "\\onehalfspacing\n"
+        preamble += "\\renewcommand{\\familydefault}{\\sfdefault}\n"
+        preamble += "\\newcommand{\\tightlist}{}\n"
+
+        preamble += f"\\title{{{paper["title"]}}}\n"
+        preamble += f"\\author{{{paper["author"]}}}\n"
+        preamble += "\\date{\\today}\n"
+
+        preamble += "\\input{build/__data}\n"
+
+        file.write(preamble)
+
     # Data
     with open("build/__data.tex", "w") as file:
         file.write(json2latex.dumps("data", paper))
@@ -176,7 +237,7 @@ def watch(**kwargs):
         observer.join()
 
 def info(**kwargs):
-    print("paperbuddy v0.3.0 by Nathan Seymour <nathan@seymour.global>")
+    print("paperbuddy v0.4.0 by Nathan Seymour <nathan@seymour.global>")
     print(f"Installed in `{sys.prefix}`")
 
 def main():
