@@ -69,6 +69,11 @@ def init(path, title="My Paper", template="simple", author="Me", language="engli
         ("content", None),
         ("content/main.md", f"# {title}"),
         ("templates", None),
+        ("README.md", f"""
+        # {title}
+                
+        Build with `paperbuddy build`.
+        """),
         ("paper.json", json.dumps({
             "template": template,
             "title": title,
@@ -219,7 +224,6 @@ def build(path, **kwargs):
 
     print("Build complete!")
 
-
 def watch(**kwargs):
     print("Watching sources...")
 
@@ -237,7 +241,7 @@ def watch(**kwargs):
         observer.join()
 
 def info(**kwargs):
-    print("paperbuddy v0.4.0 by Nathan Seymour <nathan@seymour.global>")
+    print("paperbuddy v0.4.1 by Nathan Seymour <nathan@seymour.global>")
     print(f"Installed in `{sys.prefix}`")
 
 def main():
