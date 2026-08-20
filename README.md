@@ -13,6 +13,8 @@
 ## Usage
 
 - `paperbuddy init [path]` - Initializes a new project and creates source tree.
+  - Optionally takes the `--template`, `--title`, `--author` and `--language` flags. If not provided, they will be asked for interactively.
+  - The author field is queried and prefilled from the global git user.naem field if not supplied.
 - `paperbuddy build [path]` - Build paper.
 - `paperbuddy watch [path]` - Watches source directory and rebuilds on files changes.
 

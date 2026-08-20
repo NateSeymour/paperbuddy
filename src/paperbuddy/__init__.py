@@ -12,6 +12,8 @@ import re
 import os
 import sys
 import importlib.resources
+import git
+from InquirerPy import inquirer
 
 class FileChangeEventHandler(watchdog.events.FileSystemEventHandler):
     def on_any_event(self, event: watchdog.events.FileSystemEvent):
@@ -57,7 +59,7 @@ def resolve_paper(path):
         exit(1)
 
 # Initializes a directory for a new paper project
-def init(path, title="My Paper", template="simple", author="Me", language="english", **kwargs):
+def init(path, title, template, author, language, **kwargs):
     print(f"Creating new project in {path}...")
 
     if pathlib.Path(path).exists():
@@ -69,11 +71,7 @@ def init(path, title="My Paper", template="simple", author="Me", language="engli
         ("content", None),
         ("content/main.md", f"# {title}"),
         ("templates", None),
-        ("README.md", f"""
-        # {title}
-                
-        Build with `paperbuddy build`.
-        """),
+        ("README.md", f"# {title}\n\nBuild with `paperbuddy build`."),
         ("paper.json", json.dumps({
             "template": template,
             "title": title,
@@ -85,22 +83,24 @@ def init(path, title="My Paper", template="simple", author="Me", language="engli
                 "paper": "a4paper",
             },
 
+            "abbreviations": {},
+
             "build": {
                 "plugins": [],
                 "packages": {
+                    "babel": language,
+                    "biblatex": {
+                        "style": "apa",
+                        "backend": "biber",
+                    },
                     "geometry": {
                         "margin": "2cm",
                     },
                     "fontenc": "T1",
                     "helvet": "scaled",
                     "setspace": None,
-                    "babel": language,
                     "acronym": None,
                     "csquotes": None,
-                    "biblatex": {
-                        "style": "apa",
-                        "backend": "biber",
-                    },
                     "hyperref": None,
                     "color": None,
                     "soul": None,
@@ -241,8 +241,25 @@ def watch(**kwargs):
         observer.join()
 
 def info(**kwargs):
-    print("paperbuddy v0.4.1 by Nathan Seymour <nathan@seymour.global>")
+    print("paperbuddy v0.5.0 by Nathan Seymour <nathan@seymour.global>")
     print(f"Installed in `{sys.prefix}`")
+
+def init_cli(**kwargs):
+    default_user = git.Repo(path=None).config_reader().get_value("user", "name", default=None)
+
+    if kwargs.get("template") is None:
+        kwargs["template"] = inquirer.text(message="Template:", default="simple").execute()
+
+    if kwargs.get("title") is None:
+        kwargs["title"] = inquirer.text(message="Title:").execute()
+
+    if kwargs.get("author") is None:
+        kwargs["author"] = inquirer.text(message="Author:", default=default_user).execute()
+
+    if kwargs.get("language") is None:
+        kwargs["language"] = inquirer.text(message="Language:", default="english").execute()
+
+    init(**kwargs)
 
 def main():
     # Process arguments
@@ -251,7 +268,11 @@ def main():
 
     parser_init = subparsers.add_parser("init")
     parser_init.add_argument("path", nargs="?", default=".")
-    parser_init.set_defaults(func=init)
+    parser_init.add_argument("--template")
+    parser_init.add_argument("--title")
+    parser_init.add_argument("--author")
+    parser_init.add_argument("--language")
+    parser_init.set_defaults(func=init_cli)
 
     parser_build = subparsers.add_parser("build")
     parser_build.add_argument("path", nargs="?", default=".")

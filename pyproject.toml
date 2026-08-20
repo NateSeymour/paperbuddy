@@ -1,6 +1,6 @@
 [project]
 name = "paperbuddy"
-version = "0.4.1"
+version = "0.5.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -8,6 +8,8 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "gitpython>=3.1.59",
+    "inquirerpy>=0.3.4",
     "json2latex>=0.0.3",
     "pypandoc>=1.17",
     "pypandoc-binary>=1.17",
