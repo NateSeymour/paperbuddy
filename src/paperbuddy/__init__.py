@@ -34,13 +34,13 @@ def build_latex_argstring(arg):
     return None
 
 def create_files(files, base=".", allow_exists=True):
-    pathlib.Path(base).mkdir(allow_exists)
+    pathlib.Path(base).mkdir(exist_ok=allow_exists)
 
     for path, content in files:
         file = pathlib.Path(f"{base}/{path}")
 
         if content == None:
-            file.mkdir(allow_exists)
+            file.mkdir(exist_ok=allow_exists)
         else:
             file.write_text(content)
 
@@ -241,11 +241,16 @@ def watch(**kwargs):
         observer.join()
 
 def info(**kwargs):
-    print("paperbuddy v0.5.0 by Nathan Seymour <nathan@seymour.global>")
+    print("paperbuddy v0.5.2 by Nathan Seymour <nathan@seymour.global>")
     print(f"Installed in `{sys.prefix}`")
 
 def init_cli(**kwargs):
-    default_user = git.Repo(path=None).config_reader().get_value("user", "name", default=None)
+    default_user = ""
+
+    try:
+        default_user = git.Repo(path=None).config_reader().get_value("user", "name", default=None)
+    except:
+        print("[WARNING] unable to retrieve default user name.")
 
     if kwargs.get("template") is None:
         kwargs["template"] = inquirer.text(message="Template:", default="simple").execute()
